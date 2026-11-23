@@ -15,19 +15,31 @@ import { Link } from "react-router-dom";
 import styled from "styled-components";
 
 import { resolveApiUrl } from "../../services/boardService";
-import { colors, font, radius, shadow, clampW, clampH } from "../../styles/theme";
+import { colors, font, media, radius, shadow, clampW, clampH } from "../../styles/theme";
 import { hasHorizontalMarker } from "../../utils/horizontalGallery";
 
+/*
+ * 한 줄에 3장씩 놓는다. 참여 행사 카드(BoardCardView)처럼 모바일에서도 3열을
+ * 유지하고 간격만 좁힌다.
+ */
 const List = styled.ul`
     list-style: none;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: ${clampH(46)};
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: ${clampH(46)} ${clampW(26)};
+
+    ${media.mobile} {
+        gap: ${clampH(24)} ${clampW(10)};
+    }
 `;
 
-const Item = styled.li``;
+/* "가로형으로 보기" 글은 3장을 이어 붙인 가로 배너라 한 줄을 통째로 쓴다. */
+const Item = styled.li`
+    min-width: 0;
+    ${({ $wide }) => $wide && "grid-column: 1 / -1;"}
+`;
 
 const ItemLink = styled(Link)`
     display: flex;
@@ -42,16 +54,16 @@ const ItemLink = styled(Link)`
 `;
 
 /*
- * 이미지가 있으면 틀 비율을 고정하지 않고 이미지 원래 비율대로 전체를 보여준다.
- * 공약 이행 보고에는 세로형 카드뉴스(3:4)가 주로 올라오는데, 16:6 틀에 cover 로
- * 채우면 가운데 30% 정도만 남고 위아래가 잘렸다. 세로로 너무 길어지지 않게
- * 높이만 화면의 80% 로 묶고, 남는 양옆은 배경색으로 둔다.
- * 이미지가 없을 때(제목 플레이스홀더)는 예전처럼 16:6 틀을 쓴다.
+ * 틀은 공약 이행 보고 카드뉴스 원본(1440x1920)과 같은 3:4(가로 3, 세로 4)로
+ * 고정하고, 이미지는 잘리지 않게 틀 안에 전체를 맞춰 넣는다(contain).
+ * 예전처럼 16:6 틀에 cover 로 채우면 가운데 30% 정도만 남고 위아래가 잘렸다.
+ * 원본과 비율이 같은 이미지는 틀을 빈틈없이 채우고, 비율이 다른 이미지만
+ * 남는 부분이 배경색으로 보인다.
  */
 const Banner = styled.figure`
     margin: 0;
     width: 100%;
-    aspect-ratio: ${({ $hasImage }) => ($hasImage ? "auto" : "16 / 6")};
+    aspect-ratio: 3 / 4;
     border-radius: ${radius.md};
     overflow: hidden;
     background: linear-gradient(135deg, #eef2fb 0%, #dbe4f7 100%);
@@ -63,10 +75,9 @@ const Banner = styled.figure`
 
     img {
         display: block;
-        width: auto;
-        height: auto;
-        max-width: 100%;
-        max-height: 80vh;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
     }
 `;
 
@@ -133,13 +144,10 @@ const imageAttachmentUrls = (post) =>
         .map((file) => resolveApiUrl(`/api/files/image?name=${encodeURIComponent(file.name)}`));
 
 /** 썸네일 파일이 없으면(레거시 이관 글) 제목 플레이스홀더로 되돌린다. */
-const GalleryBanner = ({ post }) => {
+const GalleryBanner = ({ post, horizontalUrls }) => {
     const [showImage, setShowImage] = useState(Boolean(post.thumbnailUrl));
 
-    const horizontalUrls = hasHorizontalMarker(post.content) ? imageAttachmentUrls(post) : [];
-    // 가로형 체크를 했어도 이미지가 3장이 안 모이면(작성 중 지웠거나 레거시)
-    // 기존 단일 배너로 조용히 되돌린다 — 깨진 줄로 보이는 것보다 안전하다.
-    if (horizontalUrls.length === 3) {
+    if (horizontalUrls) {
         return (
             <HorizontalBanner>
                 {horizontalUrls.map((url) => (
@@ -150,7 +158,7 @@ const GalleryBanner = ({ post }) => {
     }
 
     return (
-        <Banner $hasImage={showImage}>
+        <Banner>
             {showImage ? (
                 <img src={post.thumbnailUrl} alt="" onError={() => setShowImage(false)} />
             ) : (
@@ -167,14 +175,20 @@ const BoardGalleryView = ({ posts, basePath }) => {
 
     return (
         <List>
-            {posts.map((post) => (
-                <Item key={post.id}>
-                    <ItemLink to={`${basePath}/detail/${post.id}`}>
-                        <GalleryBanner post={post} />
-                        <Caption>{post.title}</Caption>
-                    </ItemLink>
-                </Item>
-            ))}
+            {posts.map((post) => {
+                const urls = hasHorizontalMarker(post.content) ? imageAttachmentUrls(post) : [];
+                // 가로형 체크를 했어도 이미지가 3장이 안 모이면(작성 중 지웠거나 레거시)
+                // 기존 단일 배너로 조용히 되돌린다 — 깨진 줄로 보이는 것보다 안전하다.
+                const horizontalUrls = urls.length === 3 ? urls : null;
+                return (
+                    <Item key={post.id} $wide={Boolean(horizontalUrls)}>
+                        <ItemLink to={`${basePath}/detail/${post.id}`}>
+                            <GalleryBanner post={post} horizontalUrls={horizontalUrls} />
+                            <Caption>{post.title}</Caption>
+                        </ItemLink>
+                    </Item>
+                );
+            })}
         </List>
     );
 };
