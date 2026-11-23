@@ -41,10 +41,17 @@ const ItemLink = styled(Link)`
     }
 `;
 
+/*
+ * 이미지가 있으면 틀 비율을 고정하지 않고 이미지 원래 비율대로 전체를 보여준다.
+ * 공약 이행 보고에는 세로형 카드뉴스(3:4)가 주로 올라오는데, 16:6 틀에 cover 로
+ * 채우면 가운데 30% 정도만 남고 위아래가 잘렸다. 세로로 너무 길어지지 않게
+ * 높이만 화면의 80% 로 묶고, 남는 양옆은 배경색으로 둔다.
+ * 이미지가 없을 때(제목 플레이스홀더)는 예전처럼 16:6 틀을 쓴다.
+ */
 const Banner = styled.figure`
     margin: 0;
     width: 100%;
-    aspect-ratio: 16 / 6;
+    aspect-ratio: ${({ $hasImage }) => ($hasImage ? "auto" : "16 / 6")};
     border-radius: ${radius.md};
     overflow: hidden;
     background: linear-gradient(135deg, #eef2fb 0%, #dbe4f7 100%);
@@ -55,15 +62,16 @@ const Banner = styled.figure`
     transition: box-shadow 0.18s ease;
 
     img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
         display: block;
+        width: auto;
+        height: auto;
+        max-width: 100%;
+        max-height: 80vh;
     }
 `;
 
 /*
- * 3장을 간격 없이 이어 붙인다. 전체 비율은 Banner(16/6)와 같게 둬서 목록의
+ * 3장을 간격 없이 이어 붙인다. 전체 비율은 16/6 으로 고정해서 목록의
  * 줄 높이가 흔들리지 않게 하고, 각 이미지는 그 1/3 폭을 cover 로 채운다 —
  * 인스타그램 카드뉴스는 애초에 한 장을 3등분해서 올리는 것이라, 이렇게
  * 이어 붙이면 원본 이미지가 거의 그대로 복원된다.
@@ -142,7 +150,7 @@ const GalleryBanner = ({ post }) => {
     }
 
     return (
-        <Banner>
+        <Banner $hasImage={showImage}>
             {showImage ? (
                 <img src={post.thumbnailUrl} alt="" onError={() => setShowImage(false)} />
             ) : (
