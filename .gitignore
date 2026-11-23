@@ -1,0 +1,45 @@
+# Python virtual environment
+.venv/
+venv/
+backend/.venv/
+backend/venv/
+
+# Python cache
+__pycache__/
+backend/__pycache__/
+*.pyc
+
+# Node packages
+node_modules/
+frontend/node_modules/
+
+# Logs
+*.log
+nohup.out
+nohup.out.gz
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Backup files
+*.bak
+*.tar.gz
+
+# React build output
+frontend/build/
+
+# Runtime uploads
+backend/uploads/
+
+# 고정 페이지 텍스트 콘텐츠 — 관리자가 화면에서 고친 값이 서버마다 다르게 쌓인다
+backend/content/
+
+# 마이그레이션 산출물 — 실제 회원 이메일/댓글 원문 등 개인정보가 들어간다
+CAU_MIGRATION/output/
+
+# macOS
+.DS_Store

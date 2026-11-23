@@ -1,0 +1,149 @@
+name: CAUGSA CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+  backend:
+    name: Backend Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.9"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install MariaDB client dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmariadb-dev
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Check Python syntax
+        run: |
+          python -m compileall -q backend
+
+      - name: Run backend tests
+        run: |
+          if [ -d "backend/tests" ] || [ -d "tests" ]; then
+            python -m pytest -v
+          else
+            echo "No backend tests directory yet. Syntax check completed."
+          fi
+
+  database:
+    name: Database Migration Check
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root_password
+          MARIADB_DATABASE: caugsa_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install MariaDB client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mariadb-client
+
+      - name: Apply base schema
+        env:
+          MYSQL_PWD: root_password
+        run: |
+          mariadb \
+            --host=127.0.0.1 \
+            --port=3306 \
+            --user=root \
+            caugsa_ci \
+            < db/schema/schema.sql
+
+      - name: Apply all migrations
+        env:
+          MYSQL_PWD: root_password
+        run: |
+          shopt -s nullglob
+
+          migration_files=(db/migrations/*.sql)
+
+          if [ ${#migration_files[@]} -eq 0 ]; then
+            echo "No migration files found."
+            exit 0
+          fi
+
+          for migration in "${migration_files[@]}"; do
+            echo "Applying ${migration}"
+
+            mariadb \
+              --host=127.0.0.1 \
+              --port=3306 \
+              --user=root \
+              caugsa_ci \
+              < "${migration}"
+          done
+
+      - name: Show resulting tables
+        env:
+          MYSQL_PWD: root_password
+        run: |
+          mariadb \
+            --host=127.0.0.1 \
+            --port=3306 \
+            --user=root \
+            --execute="SHOW TABLES;" \
+            caugsa_ci
